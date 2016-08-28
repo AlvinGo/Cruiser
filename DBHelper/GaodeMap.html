@@ -1,0 +1,238 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <script type="text/javascript" src="http://webapi.amap.com/maps?v=1.3&key=6525c2040f1c294c65e6cd16f513620c&&plugin=AMap.Scale,AMap.OverView,AMap.ToolBar"></script>
+    <link rel="stylesheet" href="http://cache.amap.com/lbs/static/main1119.css" />
+    <script src="http://cache.amap.com/lbs/static/es5.min.js"></script>
+    <!-- 新 Bootstrap 核心 CSS 文件 -->
+    <!--<link href="//cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">-->
+
+    <script type="text/javascript" src="http://cache.amap.com/lbs/static/addToolbar.js"></script>
+    <style type="text/css">
+        #container {
+            height: 90%;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="container"></div>
+        <div class="col-md-6 col-md-offset-2 button-group" style="background-color:darkslateblue; right: 125px">
+            <input type="file" id="file-input" />
+            <input type="button" id="clear" value="Clear" />
+            <span id="info"></span>
+            <input type="text" id="company-filter" />
+            <input type="button" id="btn-company-filter" value="Filter" />
+        </div>
+    </div>
+
+    <!-- jQuery文件。务必在bootstrap.min.js 之前引入 -->
+    <!--<script src="//cdn.bootcss.com/jquery/3.1.0/jquery.min.js"></script>-->
+
+    <!-- 最新的 Bootstrap 核心 JavaScript 文件 -->
+    <!--<script src="//cdn.bootcss.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>-->
+    <script type="text/javascript">
+        var heatPoints = [];
+        var heatPointNames = {};
+        var cluster;
+
+        var map = new AMap.Map('container');
+
+        currentZoom = 10;
+
+        map.setZoom(currentZoom);
+        map.setCenter([116.39, 39.9]);
+
+        initializeMap();
+        AMap.event.addListener(map, 'zoomend', onMapZooming);
+
+        function initializeMap() {
+            AMap.plugin(['AMap.ToolBar', 'AMap.Scale'], function () {
+                var toolBar = new AMap.ToolBar();
+                var scale = new AMap.Scale();
+                map.addControl(toolBar);
+                map.addControl(scale);
+            })
+
+
+
+            AMap.event.addDomListener(document.getElementById('clear'), 'click', function () {
+                if (cluster) {
+                    cluster.setMap(null);
+                }
+                heatPoints = [];
+            })
+
+            AMap.event.addDomListener(document.getElementById('btn-company-filter'), 'click', function () {
+                clearMap();
+                var companyName = document.getElementById('company-filter').value;
+                for (var i = 0; i < heatPoints.length; i++) {
+                    var point = heatPoints[i];
+                    if(point.getTitle().indexOf(companyName) != -1) {
+                        point.setMap(map);
+                    }
+                }
+            });
+        }
+
+        //var marker = new AMap.Marker({
+        //    position: [116.444127, 39.989218]
+        //    , map: map
+        //});
+
+        //var infoWindow = new AMap.InfoWindow({
+        //    content: '<h3>Title</h3><div>【芍药居】精装公寓房独门独户.紧邻地铁 家具齐全拎包入</div>'
+        //    , offset: new AMap.Pixel(0, -30)
+        //    , size: new AMap.Size(230, 0)
+        //})
+
+        //var clickHandle = AMap.event.addListener(marker, 'click', function () {
+        //    if (infoWindow.getIsOpen()) {
+        //        infoWindow.close();
+        //    } else {
+        //        infoWindow.open(map, marker.getPosition());
+        //    }
+        //})
+
+        document.getElementById('file-input').addEventListener('change', readSingleFile, false);
+
+        function readSingleFile(e) {
+            heatPoints = [];
+            clearMap();
+            var file = e.target.files[0];
+            if (!file) {
+                return;
+            }
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                var contents = e.target.result;
+                processData(contents);
+            };
+            reader.readAsText(file);
+        }
+
+        function processData(allText) {
+            var allTextLines = allText.split(/\r\n|\n/);
+            var divContents = document.getElementById('result');
+            var contents = [];
+            for (var i = 1; i < allTextLines.length; i++) {
+                var sections = allTextLines[i].split(',');
+                if (sections.length > 2) {
+                    var addr = sections[0];
+                    var cell = sections[1];
+                    var lng = sections[2];
+                    var lat = sections[3];
+                    var price = sections[5];
+                    var company = sections[7];
+
+                    var infoText = "addr: " + addr + "; price: " + price + "; company: " + company + ".";
+                    if (!lng || !lat) {
+                        continue;
+                    }
+
+                    var number = 1;
+                    var markerPosition = [lng, lat];
+                    try {
+                        var my_offset = 30;
+                        var x_offset = -30;
+                        var y_offset = -30;
+                        if (addr in heatPointNames) {
+                            var x_times = heatPointNames[addr] / 4;
+                            var y_times = heatPointNames[addr] % 4;
+                            if (y_times == 1) {
+                                x_offset -= x_times * my_offset;
+                            } else if (y_times == 2) {
+                                x_offset += x_times * my_offset;
+                            } else if (y_times == 3) {
+                                y_offset -= x_times * my_offset;
+                            } else {
+                                y_offset += x_times * my_offset;
+                            }
+                            heatPointNames[addr] += 1;
+                        } else {
+                            heatPointNames[addr] = 1;
+                        }
+                        var marker = new AMap.Marker({
+                            position: markerPosition
+							, icon: "http://amappc.cn-hangzhou.oss-pub.aliyun-inc.com/lbs/static/img/marker.png"
+							, title: infoText
+							, offset: { x: x_offset, y: y_offset }
+                        })
+                        marker.setLabel({
+                            offset: new AMap.Pixel(20, 20)
+							, content: cell
+                        });
+                        AMap.event.addListener(marker, 'click', onMarkerClick);
+                        heatPoints.push(marker);
+                        //marker.setMap(map);
+                    } catch (e) {
+                        continue;
+                    }
+                }
+            }
+            addCluster();
+
+        }
+
+        function onMapZooming() {
+            var oldZoom = currentZoom;
+            currentZoom = map.getZoom();
+            map.clearMap();
+            document.getElementById('info').innerHTML = 'Zoom：' + currentZoom;
+            if (currentZoom >= 16) {
+                if (cluster) {
+                    cluster.setMap(null);
+                    cluster = null;
+                }
+
+                for (var i = 0; i < heatPoints.length; i++) {
+                    var marker = new AMap.Marker({
+                        position: heatPoints[i].getPosition()
+                            , icon: "http://amappc.cn-hangzhou.oss-pub.aliyun-inc.com/lbs/static/img/marker.png"
+                            , title: heatPoints[i].getTitle()
+                            , offset: heatPoints[i].getOffset()
+                    })
+                    marker.setLabel({
+                        offset: new AMap.Pixel(20, 20)
+                        , content: heatPoints[i].getLabel().content
+                    });
+                    AMap.event.addListener(marker, 'click', onMarkerClick);
+                    marker.setMap(map);
+                }
+            } else if (oldZoom >= 16) {
+                if (!cluster) {
+                    addCluster();
+                }
+            }
+        }
+
+        function onMarkerClick(e) {
+            var mk = e.target;
+            var infoWindow = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -30) });
+            infoWindow.setContent(mk.getTitle());
+            infoWindow.open(map, mk.getPosition());
+        }
+
+        function addCluster() {
+            if (cluster) {
+                cluster.setMap(null);
+            }
+            map.plugin(
+                ['AMap.MarkerClusterer']
+                , function () {
+                    cluster = new AMap.MarkerClusterer(map, heatPoints);
+                }
+            );
+        }
+
+        function clearMap() {
+            map.clearMap();
+        }
+
+    </script>
+</body>
+</html>
