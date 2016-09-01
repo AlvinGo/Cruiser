@@ -26,7 +26,11 @@
             <input type="button" id="clear" value="Clear" />
             <span id="info"></span>
             <input type="text" id="company-filter" />
-            <input type="button" id="btn-company-filter" value="Filter" />
+            <input type="button" id="btn-company-filter" value="过滤" />
+			<input type="text" name="slt-filter" list="company-list" id="slt-filter">
+			</input>
+			<datalist id='company-list'></datalist>
+			<input type="button" id="btn-fitview" value="自适应缩放" />
         </div>
     </div>
 
@@ -84,9 +88,22 @@
 					addCluster(filteredPoints);
 				}
             });
+			
+			AMap.event.addDomListener(document.getElementById('btn-fitview'), 'click', function() {
+				var slt_value = document.getElementById("slt-filter");
+				alert(slt_value.value);
+			});
+			
+			document.getElementById('company-filter').addEventListener("keyup", function(event) {
+				event.preventDefault();
+				if(event.keyCode == 13) {
+					document.getElementById("btn-company-filter").click();
+				}
+			});
         }
 
         document.getElementById('file-input').addEventListener('change', readSingleFile, false);
+		
 
         function readSingleFile(e) {
             heatPoints = [];
@@ -107,6 +124,7 @@
             var allTextLines = allText.split(/\r\n|\n/);
             var divContents = document.getElementById('result');
             var contents = [];
+			var companies = [];
             for (var i = 1; i < allTextLines.length; i++) {
                 var sections = allTextLines[i].split(',');
                 if (sections.length > 2) {
@@ -116,6 +134,12 @@
                     var lat = sections[3];
                     var price = sections[5];
                     var company = sections[7];
+					var compList = document.getElementById("company-list");
+					if(!companies.includes(company)) {
+						compList.innerHTML += '<option value="' + company + '">';
+						companies.push(company);
+					}
+					
 
                     var infoText = "<b>Addr</b>: " + addr + "</br><b>Price:</b> " + price + "</br><b>Company:</b> " + company;
                     if (!lng || !lat) {
@@ -166,7 +190,6 @@
                 }
             }
             addCluster(heatPoints);
-
         }
 
         function onMapZooming() {
