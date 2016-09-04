@@ -27,16 +27,18 @@
             <span id="info"></span>
             <input type="text" id="company-filter" />
             <input type="button" id="btn-company-filter" value="过滤" />
-			<input type="text" name="slt-filter" list="company-list" id="slt-filter">
-			</input>
-			<datalist id='company-list'></datalist>
-			<input type="button" id="btn-fitview" value="自适应缩放" />
+            <input type="text" name="slt-filter" list="company-list" id="slt-filter" />
+            Price >=
+            <input type="text" id="lowest-price" style="width: 50px"/>
+            Price <=
+            <input type="text" id="largest-price" style="width: 50px"/>
+            <datalist id='company-list'></datalist>
+            <input type="button" id="btn-fitview" value="自适应缩放" />
         </div>
     </div>
 
     <!-- jQuery文件。务必在bootstrap.min.js 之前引入 -->
     <!--<script src="//cdn.bootcss.com/jquery/3.1.0/jquery.min.js"></script>-->
-
     <!-- 最新的 Bootstrap 核心 JavaScript 文件 -->
     <!--<script src="//cdn.bootcss.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>-->
     <script type="text/javascript">
@@ -80,7 +82,7 @@
                     if(isMatchedPoint(point)) {
                         if(map.getZoom() >= 15) {
 							point.setMap(map);
-						} 
+						}
 						filteredPoints.push(point);
                     }
                 }
@@ -88,12 +90,12 @@
 					addCluster(filteredPoints);
 				}
             });
-			
+
 			AMap.event.addDomListener(document.getElementById('btn-fitview'), 'click', function() {
 				var slt_value = document.getElementById("slt-filter");
 				alert(slt_value.value);
 			});
-			
+
 			document.getElementById('company-filter').addEventListener("keyup", function(event) {
 				event.preventDefault();
 				if(event.keyCode == 13) {
@@ -103,7 +105,7 @@
         }
 
         document.getElementById('file-input').addEventListener('change', readSingleFile, false);
-		
+
 
         function readSingleFile(e) {
             heatPoints = [];
@@ -134,14 +136,15 @@
                     var lat = sections[3];
                     var price = sections[5];
                     var company = sections[7];
+                    var houseId = sections[8];
 					var compList = document.getElementById("company-list");
-					if(!companies.includes(company)) {
+					if(!(company in companies)) {
 						compList.innerHTML += '<option value="' + company + '">';
 						companies.push(company);
 					}
-					
 
-                    var infoText = "<b>Addr</b>: " + addr + "</br><b>Price:</b> " + price + "</br><b>Company:</b> " + company;
+
+					var infoText = "<b>Addr</b>: <a target='_blank' href='http://bj.ganji.com/fang1/" + houseId + ".htm'>" + addr + "</a></br><b>Price:</b> " + price + "</br><b>Company:</b> " + company;
                     if (!lng || !lat) {
                         continue;
                     }
@@ -204,7 +207,7 @@
                 }
 
                 for (var i = 0; i < filteredPoints.length; i++) {
-				
+
 					var marker = new AMap.Marker({
 						position: filteredPoints[i].getPosition()
 							, icon: "http://amappc.cn-hangzhou.oss-pub.aliyun-inc.com/lbs/static/img/marker.png"
@@ -215,10 +218,10 @@
 						offset: new AMap.Pixel(20, 20)
 						, content: filteredPoints[i].getLabel().content
 					});
-					
+
 					AMap.event.addListener(marker, 'click', onMarkerClick);
 					marker.setMap(map);
-				
+
                 }
             } else {
                 if (!cluster) {
@@ -231,6 +234,7 @@
             var mk = e.target;
             var infoWindow = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -30) });
             infoWindow.setContent(mk.getTitle());
+            infoWindow.setOffset(mk.getOffset());
             infoWindow.open(map, mk.getPosition());
         }
 
@@ -245,19 +249,57 @@
                 }
             );
         }
-		
-		function getFilterValue() {
-			return document.getElementById('company-filter').value;
+
+        function getFilterValue() {
+            var filter_value = {};
+            var filter_company = document.getElementById('company-filter').value;
+		    var filter_largest_price = document.getElementById('largest-price').value;
+		    var filter_lowest_price = document.getElementById('lowest-price').value;
+		    return {
+		        'company': filter_company.trim()
+                , 'largest_price': filter_largest_price.trim()
+                , 'lowest_price': filter_lowest_price.trim()
+		    }
 		}
-		
-		function isMatchedPoint(point) {
-			var filterValue = getFilterValue();
-			if(filterValue == "") {
-				return true;
-			} else {
-				return point.getTitle().indexOf(filterValue) != -1;
-			}
-		}
+
+        function isMatchedPoint(point) {
+            var filters = getFilterValue();
+            var result = true;
+            for (key in filters) {
+                var value = filters[key];
+                if (value == "") {
+                    continue;
+                }
+                if (key == "company") {
+                    if (point.getTitle().indexOf(value) == -1) {
+                        return false;
+                    }
+                } else if (key == "largest_price") {
+                    var cur_price = getPriceFromMarkerTitle(point);
+                    if (cur_price > value) {
+                        return false;
+                    }
+                } else if (key == "lowest_price") {
+                    var cur_price = getPriceFromMarkerTitle(point);
+                    if (cur_price < value) {
+                        return false;
+                    }
+                }
+            }
+            return result;
+        }
+
+        function getPriceFromMarkerTitle(marker) {
+            var title = marker.getTitle();
+            var lines = title.split("</br>");
+            for (var i = 0; i < lines.length; i++) {
+                var pair = lines[i].split(' ');
+                var key = pair[0].trim();
+                if (key.includes("Price")) {
+                    return parseInt(pair[1].trim());
+                }
+            }
+        }
 
         function clearMap() {
             map.clearMap();
